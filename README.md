@@ -48,19 +48,90 @@ Automated transcription system for micro-phenomenological interview recordings u
 
 ```bash
 # 1. Install dependencies
-pip install openai-whisper
+pip install -r requirements.txt
 brew install ffmpeg  # macOS (or apt install ffmpeg for Linux)
 
 # 2. Verify setup
 python3 pipeline/config.py
 
-# 3. Run pipeline
-python3 pipeline/run_pipeline.py
+# 3. Run pipeline on your recording folder
+python3 pipeline/run_pipeline.py --input /path/to/your/recordings
+
+# Or use current directory
+cd /path/to/your/recordings
+python3 /path/to/pipeline/run_pipeline.py --input .
 ```
 
-Your transcripts will be in the `output/` folder.
+Your transcripts will be in a `transcripts/` subfolder within your recordings folder.
 
 **Need help?** See [USAGE.md](./USAGE.md) for detailed instructions.
+
+---
+
+## Usage Examples
+
+### Single Session (One Recording)
+
+```bash
+# Your folder structure:
+# breathwork_jan15/
+# ├── note1.wav
+# ├── note1.json
+# ├── note2.wav
+# └── note2.json
+
+python3 pipeline/run_pipeline.py --input /path/to/breathwork_jan15
+
+# Output will be in:
+# breathwork_jan15/transcripts/
+# ├── note1.txt
+# ├── note2.txt
+# ├── combined_transcript.txt
+# └── processing_report.txt
+```
+
+### Multiple Sessions (Batch Processing)
+
+```bash
+# Your folder structure:
+# all_sessions/
+# ├── session_jan15/
+# │   ├── note1.wav
+# │   └── note1.json
+# ├── session_jan20/
+# │   ├── note1.wav
+# │   └── note1.json
+# └── session_feb01/
+#     ├── note1.wav
+#     └── note1.json
+
+python3 pipeline/run_pipeline.py --input /path/to/all_sessions
+
+# Output will be in each session folder:
+# session_jan15/transcripts/
+# session_jan20/transcripts/
+# session_feb01/transcripts/
+```
+
+### Process Specific Session
+
+```bash
+# Process only one session from a batch
+python3 pipeline/run_pipeline.py --input /path/to/all_sessions --session session_jan15
+```
+
+### File Requirements
+
+Each audio recording needs a matching JSON file with timestamp:
+
+**note1.wav** → **note1.json** containing:
+```json
+{
+  "video_timestamp_sec": 5.693
+}
+```
+
+This links the voice note to a specific moment in your video recording.
 
 ---
 

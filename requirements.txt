@@ -1,0 +1,29 @@
+# Breathwork Transcription Pipeline - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core transcription engine
+openai-whisper>=20231117
+
+# Audio/video processing (required by whisper and for audio preprocessing)
+ffmpeg-python>=0.2.0
+
+# Scientific computing (whisper dependency)
+numpy>=1.20.0
+
+# PyTorch (whisper dependency - CPU version)
+# Note: For GPU support, install torch separately with CUDA support
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Additional whisper dependencies
+tiktoken>=0.3.0
+more-itertools>=8.0.0
+
+# Standard library dependencies (usually included, but listed for completeness)
+# These are typically already installed with Python 3.8+
+# pathlib (built-in Python 3.4+)
+# json (built-in)
+# datetime (built-in)
+# subprocess (built-in)
+# multiprocessing (built-in)
+# argparse (built-in)

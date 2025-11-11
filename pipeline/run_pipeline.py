@@ -33,7 +33,7 @@ def process_session(session_info: dict, cleanup: bool = True) -> bool:
     Process a single session.
 
     Args:
-        session_info: Session information dict from utils.find_all_sessions()
+        session_info: Session information dict from utils.detect_session_structure()
         cleanup: Whether to delete intermediate files after processing
 
     Returns:
@@ -65,7 +65,8 @@ def process_session(session_info: dict, cleanup: bool = True) -> bool:
 
     # Step 2: Preprocess audio
     print("\nStep 2: Preprocessing audio files...")
-    normalized_dir = config.PROCESSED_DIR / session_name / "normalized_audio"
+    # Create processed audio dir inside the session folder
+    normalized_dir = session_path / config.PROCESSED_DIR_NAME
 
     preprocessed_files = preprocess_audio.preprocess_audio_files(
         all_audio_files,
@@ -79,7 +80,8 @@ def process_session(session_info: dict, cleanup: bool = True) -> bool:
 
     # Step 3: Transcribe with Whisper
     print("\nStep 3: Transcribing audio with Whisper...")
-    output_dir = config.OUTPUT_DIR / session_name
+    # Create output dir inside the session folder
+    output_dir = session_path / config.OUTPUT_DIR_NAME
     utils.ensure_dir(output_dir)
 
     transcriber = transcribe.WhisperTranscriber(config.WHISPER_MODEL)
@@ -253,12 +255,35 @@ def generate_processing_report(session_name: str, video_file: Path,
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Transcribe micro-phenomenological interview recordings"
+        description="Transcribe micro-phenomenological interview recordings",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Process a single session folder
+  python3 run_pipeline.py --input /path/to/session_folder
+
+  # Process multiple session folders
+  python3 run_pipeline.py --input /path/to/folder_with_sessions
+
+  # Use current directory
+  python3 run_pipeline.py --input .
+
+  # Process specific session by name (when using multiple sessions)
+  python3 run_pipeline.py --input /path/to/sessions --session session1
+
+Output is always placed in a 'transcripts/' subfolder within each session folder.
+        """
+    )
+    parser.add_argument(
+        '--input',
+        type=str,
+        default='.',
+        help="Input directory containing audio files (default: current directory)"
     )
     parser.add_argument(
         '--session',
         type=str,
-        help="Process specific session by name (otherwise processes all)"
+        help="Process specific session by name (for multiple sessions mode)"
     )
     parser.add_argument(
         '--no-cleanup',
@@ -275,15 +300,27 @@ def main():
         print(f"✗ Configuration error: {e}")
         return 1
 
-    # Find sessions
-    print("\nScanning for sessions...")
-    sessions = utils.find_all_sessions(config.INPUT_DIR)
+    # Resolve input directory
+    input_dir = Path(args.input).resolve()
 
-    if not sessions:
-        print("✗ No sessions found in input directory!")
+    # Detect session structure
+    print(f"\nScanning input directory: {input_dir}")
+    try:
+        mode, sessions = utils.detect_session_structure(input_dir)
+    except (FileNotFoundError, NotADirectoryError) as e:
+        print(f"✗ {e}")
         return 1
 
-    print(f"✓ Found {len(sessions)} session(s)")
+    # Print detection results
+    if mode == "single":
+        print(f"✓ Detected: Single session")
+        audio_count = len(list(sessions[0]['path'].glob('*.wav'))) + len(list(sessions[0]['path'].glob('*.WAV')))
+        print(f"  Audio files found: {audio_count}")
+    else:
+        print(f"✓ Detected: Multiple sessions ({len(sessions)} folders)")
+        for session in sessions:
+            audio_count = len(list(session['path'].glob('*.wav'))) + len(list(session['path'].glob('*.WAV')))
+            print(f"  - {session['name']} ({audio_count} audio files)")
 
     # Filter by session name if specified
     if args.session:
@@ -291,6 +328,7 @@ def main():
         if not sessions:
             print(f"✗ Session '{args.session}' not found!")
             return 1
+        print(f"\nFiltering to session: {args.session}")
 
     # Process each session
     cleanup = not args.no_cleanup
@@ -310,7 +348,11 @@ def main():
     print(f"PROCESSING COMPLETE")
     print(f"{'=' * 80}")
     print(f"Successfully processed: {success_count}/{len(sessions)} sessions")
-    print(f"Output directory: {config.OUTPUT_DIR}")
+    if sessions:
+        print(f"\nOutput locations:")
+        for session in sessions:
+            output_path = session['path'] / config.OUTPUT_DIR_NAME
+            print(f"  - {output_path}")
     print(f"{'=' * 80}\n")
 
     return 0 if success_count == len(sessions) else 1

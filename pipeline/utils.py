@@ -160,39 +160,105 @@ def get_file_creation_time(file_path: Path) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def detect_session_structure(input_dir: Path) -> Tuple[str, List[Dict]]:
+    """
+    Detect if input directory contains a single session or multiple sessions.
+
+    Auto-detection logic:
+    1. If input_dir contains .wav files directly → Single session
+    2. If input_dir contains subdirectories with .wav files → Multiple sessions
+    3. If no .wav files found → Error
+
+    Args:
+        input_dir: Path to input directory
+
+    Returns:
+        Tuple of (mode, sessions_list)
+        - mode: "single" or "multiple"
+        - sessions_list: List of session dicts with 'name', 'path', 'video_file' keys
+    """
+    if not input_dir.exists():
+        raise FileNotFoundError(f"Input directory not found: {input_dir}")
+
+    if not input_dir.is_dir():
+        raise NotADirectoryError(f"Input path is not a directory: {input_dir}")
+
+    # Check for audio files directly in input_dir
+    audio_files_here = []
+    for ext in config.AUDIO_EXTENSIONS:
+        audio_files_here.extend(input_dir.glob(f"*{ext}"))
+
+    # Filter out ignored files
+    audio_files_here = [f for f in audio_files_here if f.name not in config.IGNORE_FILES]
+
+    if audio_files_here:
+        # Single session mode - audio files found directly
+        video_file = None
+        for ext in ['.mkv', '.mp4', '.avi', '.mov']:
+            potential_videos = list(input_dir.glob(f"*{ext}"))
+            if potential_videos:
+                video_file = potential_videos[0]
+                break
+
+        session = {
+            'name': input_dir.name,
+            'path': input_dir,
+            'video_file': video_file
+        }
+        return "single", [session]
+
+    # No audio files at top level, check subdirectories
+    sessions = []
+    for item in input_dir.iterdir():
+        if item.is_dir() and item.name not in [config.PROCESSED_DIR_NAME, config.OUTPUT_DIR_NAME]:
+            # Check if this subfolder has audio files
+            audio_in_subdir = []
+            for ext in config.AUDIO_EXTENSIONS:
+                audio_in_subdir.extend(item.glob(f"*{ext}"))
+
+            audio_in_subdir = [f for f in audio_in_subdir if f.name not in config.IGNORE_FILES]
+
+            if audio_in_subdir:
+                # Found a session subfolder
+                video_file = None
+                for ext in ['.mkv', '.mp4', '.avi', '.mov']:
+                    potential_videos = list(item.glob(f"*{ext}"))
+                    if potential_videos:
+                        video_file = potential_videos[0]
+                        break
+
+                sessions.append({
+                    'name': item.name,
+                    'path': item,
+                    'video_file': video_file
+                })
+
+    if sessions:
+        # Multiple sessions mode
+        return "multiple", sessions
+
+    # No audio files found anywhere
+    raise FileNotFoundError(f"No audio files found in {input_dir} or its subdirectories")
+
+
 def find_all_sessions(input_dir: Path) -> List[Dict]:
     """
     Find all session directories in the input directory.
 
+    This is a legacy function kept for backwards compatibility.
+    Use detect_session_structure() for new code.
+
     Args:
-        input_dir: Path to input directory (vid annos/)
+        input_dir: Path to input directory
 
     Returns:
         List of session info dicts with 'name', 'path', 'video_file' keys
     """
-    sessions = []
-
-    # Look for session folders (format: video_recording_*)
-    for item in input_dir.iterdir():
-        if item.is_dir():
-            # Look for subdirectories containing recordings
-            for subdir in item.iterdir():
-                if subdir.is_dir() and subdir.name.startswith('video_recording_'):
-                    # Look for matching video file
-                    video_file = None
-                    for ext in ['.mkv', '.mp4', '.avi', '.mov']:
-                        potential_video = item / f"{subdir.name}{ext}"
-                        if potential_video.exists():
-                            video_file = potential_video
-                            break
-
-                    sessions.append({
-                        'name': subdir.name,
-                        'path': subdir,
-                        'video_file': video_file
-                    })
-
-    return sessions
+    try:
+        mode, sessions = detect_session_structure(input_dir)
+        return sessions
+    except FileNotFoundError:
+        return []
 
 
 def ensure_dir(path: Path) -> None:

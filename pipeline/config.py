@@ -12,20 +12,19 @@ from pathlib import Path
 # DIRECTORY PATHS
 # ============================================================================
 
-# Base directory (project root)
+# Base directory (project root) - used for models storage only
 BASE_DIR = Path(__file__).parent.parent.absolute()
 
-# Input: Original data directory
-INPUT_DIR = BASE_DIR / "vid annos"
-
-# Temporary: Processed audio files (will be deleted after transcription)
-PROCESSED_DIR = BASE_DIR / "processed"
-
-# Output: Final transcriptions and reports
-OUTPUT_DIR = BASE_DIR / "output"
-
-# Models: Whisper model storage
+# Models: Whisper model storage (global location)
 MODELS_DIR = BASE_DIR / "models"
+
+# Temporary: Processed audio files directory name (created per session)
+# This will be created inside each session folder during processing
+PROCESSED_DIR_NAME = "processed_audio"
+
+# Output: Transcripts directory name (created per session)
+# This will be created inside each session folder for outputs
+OUTPUT_DIR_NAME = "transcripts"
 
 # ============================================================================
 # WHISPER SETTINGS
@@ -140,8 +139,8 @@ LOG_LEVEL = "INFO"
 # Log to file in addition to console
 LOG_TO_FILE = True
 
-# Log file location
-LOG_FILE = OUTPUT_DIR / "transcription.log"
+# Log file location (will be created in session output directory)
+LOG_FILE_NAME = "transcription.log"
 
 # ============================================================================
 # SCIENTIFIC METADATA
@@ -168,13 +167,7 @@ reproducibility. All processing performed locally with no cloud services.
 def validate_config():
     """Validate configuration settings and create necessary directories."""
 
-    # Check if input directory exists
-    if not INPUT_DIR.exists():
-        raise FileNotFoundError(f"Input directory not found: {INPUT_DIR}")
-
-    # Create output directories if they don't exist
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Create models directory if it doesn't exist
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Validate Whisper model name
@@ -200,9 +193,9 @@ if __name__ == "__main__":
     # Test configuration when run directly
     validate_config()
     print(f"\nConfiguration Summary:")
-    print(f"  Input directory: {INPUT_DIR}")
-    print(f"  Output directory: {OUTPUT_DIR}")
+    print(f"  Models directory: {MODELS_DIR}")
     print(f"  Whisper model: {WHISPER_MODEL}")
     print(f"  Sample rate: {TARGET_SAMPLE_RATE} Hz")
     print(f"  Channels: {TARGET_CHANNELS} (mono)")
     print(f"  Bit depth: {TARGET_BIT_DEPTH}-bit")
+    print(f"\nNote: Input/output directories are now specified via --input argument")
