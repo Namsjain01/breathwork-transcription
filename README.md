@@ -58,19 +58,25 @@ This pipeline automatically transcribes audio recordings (voice notes) and links
    └─> Runs locally on your CPU/GPU
    └─> Temperature 0.0 for deterministic results
 
-5. MERGE WITH TIMESTAMPS
+5. QUALITY ANALYSIS (NEW!)
+   └─> Detect hallucinations (fake/repetitive text)
+   └─> Identify silence segments
+   └─> Flag low-confidence transcriptions
+
+6. MERGE WITH TIMESTAMPS
    └─> Combine transcripts with video timestamps
    └─> Generate individual + combined transcripts
 
-6. OUTPUT RESULTS
+7. OUTPUT RESULTS
    └─> Save TXT (human-readable) and JSON (machine-readable)
-   └─> Create processing report with statistics
+   └─> Create processing report with quality statistics
 ```
 
 ### Processing Details
 
 - **Audio Preprocessing**: FFmpeg converts audio to Whisper-optimized format (16kHz mono, 16-bit PCM) with loudness normalization
 - **Transcription**: Whisper AI model processes audio locally, no internet required
+- **Quality Detection**: Automatic hallucination detection, silence detection, and confidence scoring
 - **Verbatim Output**: Preserves filler words, hesitations, and natural speech patterns
 - **Deterministic**: Temperature 0.0 ensures identical results on repeated runs
 
@@ -367,6 +373,14 @@ This is the transcribed text from the audio recording.
 All words are preserved verbatim including um, uh, etc.
 ```
 
+**With quality warnings (if detected):**
+```
+[VIDEO TIMESTAMP: 00:02:05.693]
+[QUALITY WARNINGS: hallucination_detected]
+
+Thank you for watching. Please like and subscribe.
+```
+
 ### Individual Transcript (JSON)
 
 **note1.json:**
@@ -377,9 +391,27 @@ All words are preserved verbatim including um, uh, etc.
   "video_timestamp_sec": 125.693,
   "video_timestamp_formatted": "00:02:05.693",
   "audio_duration_sec": 7.234,
+  "language": "en",
   "transcription": "This is the transcribed text...",
   "word_count": 42,
-  "character_count": 215
+  "character_count": 215,
+  "quality_flags": [],
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 7.234,
+      "text": "This is the transcribed text...",
+      "compression_ratio": 1.13,
+      "no_speech_prob": 0.001,
+      "avg_logprob": -0.287,
+      "confidence": 0.751,
+      "likely_hallucination": false,
+      "likely_silence": false,
+      "low_confidence": false,
+      "quality_flags": []
+    }
+  ]
 }
 ```
 
@@ -423,7 +455,8 @@ Complete structured data:
     "processing_timestamp": "2025-11-11T10:30:15",
     "transcription_model": "whisper-small.en",
     "total_recordings": 5,
-    "pipeline_version": "1.0.0"
+    "pipeline_version": "1.0.0",
+    "quality_checks_enabled": true
   },
   "annotations": [
     {
@@ -431,14 +464,25 @@ Complete structured data:
       "video_timestamp_sec": 5.693,
       "audio_file": "note1.wav",
       "transcription": "...",
-      "word_count": 42
+      "word_count": 42,
+      "quality_flags": [],
+      "segments": [...]
     },
     ...
   ],
   "statistics": {
     "total_audio_duration_sec": 187.5,
     "total_words": 324,
-    "average_words_per_annotation": 65
+    "average_words_per_annotation": 65,
+    "quality_metrics": {
+      "total_segments": 15,
+      "segments_with_hallucination": 0,
+      "segments_with_silence": 1,
+      "segments_with_low_confidence": 0,
+      "recordings_with_hallucination": 0,
+      "recordings_with_silence": 1,
+      "recordings_with_low_confidence": 0
+    }
   }
 }
 ```
@@ -471,7 +515,112 @@ CONTENT STATISTICS
 Total audio duration:           187.5 seconds
 Total words transcribed:        324
 Average words per recording:    65
+
+QUALITY METRICS
+────────────────────────────────────────────────────────────────────────────────
+Total segments analyzed:        15
+Segments with hallucination:    0 (0.0%)
+Segments with silence:          1 (6.7%)
+Segments with low confidence:   0 (0.0%)
+Recordings with quality issues: 1 (20.0%)
+
+QUALITY THRESHOLDS
+────────────────────────────────────────────────────────────────────────────────
+Compression ratio threshold:    2.4 (hallucination detector)
+No-speech probability threshold: 0.6 (silence detector)
+Confidence threshold:           -1.0 (low confidence)
 ```
+
+---
+
+## Quality Detection & Configuration
+
+### What Gets Detected
+
+The pipeline automatically analyzes every transcription segment for quality issues:
+
+#### 1. **Hallucination Detection**
+Detects when Whisper generates fake or repetitive text (common on silence or noise).
+
+**Examples:**
+- ✗ "Thank you for watching. Please like and subscribe." (on silence)
+- ✗ "The same thing. The same thing. The same thing." (repetition loop)
+
+**How it works:** Compression ratio > 2.4 indicates hallucination
+
+#### 2. **Silence Detection**
+Identifies segments with no actual speech (breathing, background noise, pauses).
+
+**How it works:** no_speech_prob > 0.6 indicates likely silence
+
+#### 3. **Low Confidence Detection**
+Flags transcriptions where Whisper was uncertain about the words.
+
+**How it works:** avg_logprob < -1.0 indicates low confidence (< 37%)
+
+### Configuring Quality Thresholds
+
+Edit `pipeline/config.py` to adjust detection sensitivity:
+
+```python
+# Enable/disable quality checks
+ENABLE_QUALITY_CHECKS = True  # Set to False to disable
+
+# Hallucination detection (higher = more lenient)
+COMPRESSION_RATIO_THRESHOLD = 2.4  # Default: 2.4
+# Examples:
+#   2.0 = Strict (catches more, may have false positives)
+#   2.4 = Balanced (recommended)
+#   3.0 = Lenient (only obvious hallucinations)
+
+# Silence detection (higher = more lenient)
+NO_SPEECH_THRESHOLD = 0.6  # Default: 0.6
+# Examples:
+#   0.4 = Strict (flags more segments as silence)
+#   0.6 = Balanced (recommended)
+#   0.8 = Lenient (keeps quiet speech)
+
+# Confidence threshold (lower = more lenient)
+CONFIDENCE_THRESHOLD = -1.0  # Default: -1.0 (37% confidence)
+# Examples:
+#   -0.5 = Strict (60% minimum confidence)
+#   -1.0 = Balanced (37% minimum confidence)
+#   -1.5 = Lenient (22% minimum confidence)
+```
+
+### Understanding Quality Flags
+
+When quality issues are detected, you'll see flags in the output:
+
+- **`hallucination_detected`** - Likely fake/repetitive text
+- **`silence_detected`** - Likely no actual speech
+- **`low_confidence`** - Uncertain transcription
+
+**In TXT files:**
+```
+[QUALITY WARNINGS: hallucination_detected]
+```
+
+**In JSON files:**
+```json
+{
+  "quality_flags": ["hallucination_detected"],
+  "segments": [
+    {
+      "compression_ratio": 3.5,
+      "likely_hallucination": true
+    }
+  ]
+}
+```
+
+### Quality Metrics in Reports
+
+Processing reports now include quality statistics:
+- Total segments analyzed
+- Percentage of segments with each issue type
+- Number of recordings affected
+- Thresholds used for detection
 
 ---
 
@@ -640,8 +789,8 @@ Perfect for:
 
 ---
 
-**Version**: 1.0.0
-**Last Updated**: 2025-11-11
+**Version**: 1.1.0
+**Last Updated**: 2025-11-13
 **Repository**: https://github.com/Namsjain01/breathwork-transcription
 
 ---

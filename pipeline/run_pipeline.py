@@ -171,8 +171,39 @@ def generate_processing_report(session_name: str, video_file: Path,
     total_files = len(paired_files) + len(orphaned_files)
     successful = len(transcripts)
     total_duration = sum(utils.get_audio_duration(f['audio']) for f in paired_files if f['audio'].stem in transcripts)
-    total_words = sum(utils.count_words(transcripts[f['audio'].stem]) for f in paired_files if f['audio'].stem in transcripts)
-    total_chars = sum(len(transcripts[f['audio'].stem]) for f in paired_files if f['audio'].stem in transcripts)
+    total_words = sum(utils.count_words(transcripts[f['audio'].stem]["text"]) for f in paired_files if f['audio'].stem in transcripts)
+    total_chars = sum(len(transcripts[f['audio'].stem]["text"]) for f in paired_files if f['audio'].stem in transcripts)
+
+    # Calculate quality statistics
+    total_segments = 0
+    segments_with_hallucination = 0
+    segments_with_silence = 0
+    segments_with_low_confidence = 0
+    recordings_with_issues = 0
+
+    for file_stem in transcripts:
+        result = transcripts[file_stem]
+        segments = result.get("segments", [])
+        total_segments += len(segments)
+
+        has_quality_issue = False
+        for segment in segments:
+            from merge_outputs import analyze_segment_quality, add_quality_flags
+            quality = analyze_segment_quality(segment)
+            quality = add_quality_flags(quality)
+
+            if quality['likely_hallucination']:
+                segments_with_hallucination += 1
+                has_quality_issue = True
+            if quality['likely_silence']:
+                segments_with_silence += 1
+                has_quality_issue = True
+            if quality['low_confidence']:
+                segments_with_low_confidence += 1
+                has_quality_issue = True
+
+        if has_quality_issue:
+            recordings_with_issues += 1
 
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write("=" * 80 + "\n")
@@ -240,12 +271,30 @@ def generate_processing_report(session_name: str, video_file: Path,
         f.write(f"Whisper Model: {config.WHISPER_MODEL}\n")
         f.write(f"Pipeline Version: {config.PIPELINE_VERSION}\n\n")
 
+        if config.ENABLE_QUALITY_CHECKS and total_segments > 0:
+            f.write("QUALITY METRICS\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"Total segments analyzed:        {total_segments}\n")
+            f.write(f"Segments with hallucination:    {segments_with_hallucination} ({100 * segments_with_hallucination / total_segments:.1f}%)\n")
+            f.write(f"Segments with silence:          {segments_with_silence} ({100 * segments_with_silence / total_segments:.1f}%)\n")
+            f.write(f"Segments with low confidence:   {segments_with_low_confidence} ({100 * segments_with_low_confidence / total_segments:.1f}%)\n")
+            f.write(f"Recordings with quality issues: {recordings_with_issues} ({100 * recordings_with_issues / successful:.1f}%)\n\n")
+
+            f.write("QUALITY THRESHOLDS\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"Compression ratio threshold:    {config.COMPRESSION_RATIO_THRESHOLD} (hallucination detector)\n")
+            f.write(f"No-speech probability threshold: {config.NO_SPEECH_THRESHOLD} (silence detector)\n")
+            f.write(f"Confidence threshold:           {config.CONFIDENCE_THRESHOLD} (low confidence)\n\n")
+
         f.write("QUALITY NOTES\n")
         f.write("─" * 80 + "\n")
         f.write("- All transcriptions include verbatim speech (filler words preserved)\n")
         f.write(f"- Temperature: {config.TEMPERATURE} (deterministic, reproducible)\n")
         f.write(f"- Language: {config.LANGUAGE} (forced)\n")
-        f.write("- No post-processing or correction applied\n\n")
+        f.write("- No post-processing or correction applied\n")
+        if config.ENABLE_QUALITY_CHECKS:
+            f.write("- Quality checks enabled (hallucination & silence detection)\n")
+        f.write("\n")
 
         f.write("=" * 80 + "\n")
         f.write("END OF REPORT\n")

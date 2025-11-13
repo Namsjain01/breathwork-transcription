@@ -8,14 +8,74 @@ final output files (TXT and JSON formats).
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
+import math
 
 import config
 import utils
 
 
+def analyze_segment_quality(segment: Dict) -> Dict:
+    """
+    Analyze quality metrics for a single segment.
+
+    Args:
+        segment: Whisper segment dictionary with quality metrics
+
+    Returns:
+        Dictionary with quality analysis results
+    """
+    compression_ratio = segment.get('compression_ratio', 1.0)
+    no_speech_prob = segment.get('no_speech_prob', 0.0)
+    avg_logprob = segment.get('avg_logprob', -0.5)
+
+    # Detect quality issues
+    likely_hallucination = compression_ratio > config.COMPRESSION_RATIO_THRESHOLD
+    likely_silence = no_speech_prob > config.NO_SPEECH_THRESHOLD
+    low_confidence = avg_logprob < config.CONFIDENCE_THRESHOLD
+
+    # Calculate confidence score (0-1 scale from log probability)
+    # avg_logprob typically ranges from 0 (perfect) to -inf (impossible)
+    # Common range is -0.2 to -1.5
+    confidence = math.exp(avg_logprob) if avg_logprob > -10 else 0.0
+
+    return {
+        'compression_ratio': round(compression_ratio, 2),
+        'no_speech_prob': round(no_speech_prob, 3),
+        'avg_logprob': round(avg_logprob, 3),
+        'confidence': round(confidence, 3),
+        'likely_hallucination': likely_hallucination,
+        'likely_silence': likely_silence,
+        'low_confidence': low_confidence,
+        'quality_flags': []
+    }
+
+
+def add_quality_flags(quality_analysis: Dict) -> Dict:
+    """
+    Add human-readable quality flags to analysis.
+
+    Args:
+        quality_analysis: Quality analysis dictionary
+
+    Returns:
+        Updated dictionary with quality_flags list
+    """
+    flags = []
+
+    if quality_analysis['likely_hallucination']:
+        flags.append('hallucination_detected')
+    if quality_analysis['likely_silence']:
+        flags.append('silence_detected')
+    if quality_analysis['low_confidence']:
+        flags.append('low_confidence')
+
+    quality_analysis['quality_flags'] = flags
+    return quality_analysis
+
+
 def generate_individual_transcripts(paired_files: List[Dict],
                                     orphaned_files: List[Path],
-                                    transcripts: Dict[str, str],
+                                    transcripts: Dict[str, Dict],
                                     output_dir: Path) -> None:
     """
     Generate individual transcript files (TXT and JSON) with timestamp headers.
@@ -23,7 +83,7 @@ def generate_individual_transcripts(paired_files: List[Dict],
     Args:
         paired_files: List of paired audio/JSON file dicts
         orphaned_files: List of orphaned audio files
-        transcripts: Dictionary mapping filename stems to transcribed text
+        transcripts: Dictionary mapping filename stems to Whisper result dicts
         output_dir: Output directory for transcript files
     """
     transcripts_dir = output_dir / "transcripts"
@@ -39,19 +99,48 @@ def generate_individual_transcripts(paired_files: List[Dict],
         if filename_stem not in transcripts:
             continue
 
-        text = transcripts[filename_stem]
+        result = transcripts[filename_stem]
+        text = result["text"].strip()
+        segments = result.get("segments", [])
+        language = result.get("language", "unknown")
         duration = utils.get_audio_duration(audio_file)
 
-        # Create TXT file with timestamp
+        # Analyze quality for each segment
+        segments_with_quality = []
+        quality_flags = set()
+
+        for segment in segments:
+            quality = analyze_segment_quality(segment)
+            quality = add_quality_flags(quality)
+
+            # Collect overall quality flags
+            quality_flags.update(quality['quality_flags'])
+
+            segments_with_quality.append({
+                "id": segment.get("id", 0),
+                "start": round(segment.get("start", 0.0), 3),
+                "end": round(segment.get("end", 0.0), 3),
+                "text": segment.get("text", "").strip(),
+                **quality
+            })
+
+        # Create TXT file with timestamp and quality warnings
         txt_file = transcripts_dir / f"{filename_stem}.txt"
         with open(txt_file, 'w', encoding='utf-8') as f:
             # Write timestamp header
-            f.write(f"[VIDEO TIMESTAMP: {utils.format_timestamp(timestamp_sec)}]\n\n")
+            f.write(f"[VIDEO TIMESTAMP: {utils.format_timestamp(timestamp_sec)}]\n")
+
+            # Write quality warnings if any
+            if config.ENABLE_QUALITY_CHECKS and quality_flags:
+                f.write(f"[QUALITY WARNINGS: {', '.join(sorted(quality_flags))}]\n")
+
+            f.write("\n")
+
             # Write transcription
             f.write(text)
             f.write("\n")
 
-        # Create JSON file with metadata
+        # Create JSON file with metadata and quality metrics
         json_file = transcripts_dir / f"{filename_stem}.json"
         json_data = {
             "audio_file": audio_file.name,
@@ -59,9 +148,12 @@ def generate_individual_transcripts(paired_files: List[Dict],
             "video_timestamp_sec": timestamp_sec,
             "video_timestamp_formatted": utils.format_timestamp(timestamp_sec),
             "audio_duration_sec": round(duration, 3),
+            "language": language,
             "transcription": text,
             "word_count": utils.count_words(text),
-            "character_count": len(text)
+            "character_count": len(text),
+            "quality_flags": sorted(list(quality_flags)),
+            "segments": segments_with_quality if config.ENABLE_QUALITY_CHECKS else []
         }
         utils.save_json_data(json_data, json_file)
 
@@ -73,16 +165,44 @@ def generate_individual_transcripts(paired_files: List[Dict],
         if filename_stem not in transcripts:
             continue
 
-        text = transcripts[filename_stem]
+        result = transcripts[filename_stem]
+        text = result["text"].strip()
+        segments = result.get("segments", [])
+        language = result.get("language", "unknown")
         duration = utils.get_audio_duration(audio_file)
         creation_time = utils.get_file_creation_time(audio_file)
+
+        # Analyze quality for each segment
+        segments_with_quality = []
+        quality_flags = set()
+
+        for segment in segments:
+            quality = analyze_segment_quality(segment)
+            quality = add_quality_flags(quality)
+
+            # Collect overall quality flags
+            quality_flags.update(quality['quality_flags'])
+
+            segments_with_quality.append({
+                "id": segment.get("id", 0),
+                "start": round(segment.get("start", 0.0), 3),
+                "end": round(segment.get("end", 0.0), 3),
+                "text": segment.get("text", "").strip(),
+                **quality
+            })
 
         # Create TXT file
         txt_file = transcripts_dir / f"{filename_stem}.txt"
         with open(txt_file, 'w', encoding='utf-8') as f:
             # Write orphan header
             f.write(f"[ORPHANED - NO VIDEO TIMESTAMP]\n")
-            f.write(f"[File created: {creation_time}]\n\n")
+            f.write(f"[File created: {creation_time}]\n")
+
+            # Write quality warnings if any
+            if config.ENABLE_QUALITY_CHECKS and quality_flags:
+                f.write(f"[QUALITY WARNINGS: {', '.join(sorted(quality_flags))}]\n")
+
+            f.write("\n")
             f.write("This recording has no matching JSON timestamp file.\n\n")
             # Write transcription
             f.write(text)
@@ -95,9 +215,12 @@ def generate_individual_transcripts(paired_files: List[Dict],
             "has_video_timestamp": False,
             "file_created": creation_time,
             "audio_duration_sec": round(duration, 3),
+            "language": language,
             "transcription": text,
             "word_count": utils.count_words(text),
             "character_count": len(text),
+            "quality_flags": sorted(list(quality_flags)),
+            "segments": segments_with_quality if config.ENABLE_QUALITY_CHECKS else [],
             "note": "No matching JSON timestamp file found"
         }
         utils.save_json_data(json_data, json_file)
@@ -105,7 +228,7 @@ def generate_individual_transcripts(paired_files: List[Dict],
 
 def generate_combined_txt(paired_files: List[Dict],
                          orphaned_files: List[Path],
-                         transcripts: Dict[str, str],
+                         transcripts: Dict[str, Dict],
                          session_name: str,
                          video_file: Path,
                          output_file: Path) -> None:
@@ -115,7 +238,7 @@ def generate_combined_txt(paired_files: List[Dict],
     Args:
         paired_files: List of paired audio/JSON file dicts
         orphaned_files: List of orphaned audio files
-        transcripts: Dictionary mapping filename stems to transcribed text
+        transcripts: Dictionary mapping filename stems to Whisper result dicts
         session_name: Name of the session
         video_file: Path to video file (if exists)
         output_file: Output TXT file path
@@ -143,14 +266,28 @@ def generate_combined_txt(paired_files: List[Dict],
             if filename_stem not in transcripts:
                 continue
 
-            text = transcripts[filename_stem]
+            result = transcripts[filename_stem]
+            text = result["text"].strip()
+            segments = result.get("segments", [])
             duration = utils.get_audio_duration(audio_file)
+
+            # Analyze quality
+            quality_flags = set()
+            for segment in segments:
+                quality = analyze_segment_quality(segment)
+                quality = add_quality_flags(quality)
+                quality_flags.update(quality['quality_flags'])
 
             f.write(config.SECTION_SEPARATOR + "\n")
             f.write(f"ANNOTATION #{i}\n")
             f.write(f"VIDEO TIMESTAMP: {utils.format_timestamp(timestamp_sec)} ({timestamp_sec} seconds)\n")
             f.write(f"AUDIO FILE: {audio_file.name}\n")
             f.write(f"DURATION: {duration:.1f} seconds\n")
+
+            # Add quality warnings if any
+            if config.ENABLE_QUALITY_CHECKS and quality_flags:
+                f.write(f"QUALITY WARNINGS: {', '.join(sorted(quality_flags))}\n")
+
             f.write(config.SECTION_SEPARATOR + "\n\n")
             f.write(text)
             f.write("\n\n\n")
@@ -168,7 +305,8 @@ def generate_combined_txt(paired_files: List[Dict],
                 if filename_stem not in transcripts:
                     continue
 
-                text = transcripts[filename_stem]
+                result = transcripts[filename_stem]
+                text = result["text"].strip()
                 creation_time = utils.get_file_creation_time(audio_file)
                 duration = utils.get_audio_duration(audio_file)
 
@@ -180,7 +318,7 @@ def generate_combined_txt(paired_files: List[Dict],
 
         # Footer
         total_duration = sum(utils.get_audio_duration(f['audio']) for f in paired_files if f['audio'].stem in transcripts)
-        total_words = sum(utils.count_words(transcripts[f['audio'].stem]) for f in paired_files if f['audio'].stem in transcripts)
+        total_words = sum(utils.count_words(transcripts[f['audio'].stem]["text"]) for f in paired_files if f['audio'].stem in transcripts)
 
         f.write(config.HEADER_SEPARATOR + "\n")
         f.write("END OF TRANSCRIPT\n")
@@ -191,7 +329,7 @@ def generate_combined_txt(paired_files: List[Dict],
 
 def generate_combined_json(paired_files: List[Dict],
                           orphaned_files: List[Path],
-                          transcripts: Dict[str, str],
+                          transcripts: Dict[str, Dict],
                           session_name: str,
                           video_file: Path,
                           output_file: Path) -> None:
@@ -201,13 +339,15 @@ def generate_combined_json(paired_files: List[Dict],
     Args:
         paired_files: List of paired audio/JSON file dicts
         orphaned_files: List of orphaned audio files
-        transcripts: Dictionary mapping filename stems to transcribed text
+        transcripts: Dictionary mapping filename stems to Whisper result dicts
         session_name: Name of the session
         video_file: Path to video file (if exists)
         output_file: Output JSON file path
     """
     # Build annotations list
     annotations = []
+    total_quality_issues = {"hallucination": 0, "silence": 0, "low_confidence": 0}
+
     for i, file_info in enumerate(paired_files, 1):
         audio_file = file_info['audio']
         timestamp_sec = file_info['timestamp_sec']
@@ -217,8 +357,38 @@ def generate_combined_json(paired_files: List[Dict],
         if filename_stem not in transcripts:
             continue
 
-        text = transcripts[filename_stem]
+        result = transcripts[filename_stem]
+        text = result["text"].strip()
+        segments = result.get("segments", [])
+        language = result.get("language", "unknown")
         duration = utils.get_audio_duration(audio_file)
+
+        # Analyze quality for each segment
+        segments_with_quality = []
+        quality_flags = set()
+
+        for segment in segments:
+            quality = analyze_segment_quality(segment)
+            quality = add_quality_flags(quality)
+
+            # Collect overall quality flags
+            quality_flags.update(quality['quality_flags'])
+
+            # Count quality issues
+            if quality['likely_hallucination']:
+                total_quality_issues["hallucination"] += 1
+            if quality['likely_silence']:
+                total_quality_issues["silence"] += 1
+            if quality['low_confidence']:
+                total_quality_issues["low_confidence"] += 1
+
+            segments_with_quality.append({
+                "id": segment.get("id", 0),
+                "start": round(segment.get("start", 0.0), 3),
+                "end": round(segment.get("end", 0.0), 3),
+                "text": segment.get("text", "").strip(),
+                **quality
+            })
 
         annotations.append({
             "id": i,
@@ -227,9 +397,12 @@ def generate_combined_json(paired_files: List[Dict],
             "video_timestamp_formatted": utils.format_timestamp(timestamp_sec),
             "audio_file": audio_file.name,
             "audio_duration_sec": round(duration, 3),
+            "language": language,
             "transcription": text,
             "word_count": utils.count_words(text),
-            "character_count": len(text)
+            "character_count": len(text),
+            "quality_flags": sorted(list(quality_flags)),
+            "segments": segments_with_quality if config.ENABLE_QUALITY_CHECKS else []
         })
 
     # Build orphaned recordings list
@@ -241,9 +414,38 @@ def generate_combined_json(paired_files: List[Dict],
         if filename_stem not in transcripts:
             continue
 
-        text = transcripts[filename_stem]
+        result = transcripts[filename_stem]
+        text = result["text"].strip()
+        segments = result.get("segments", [])
+        language = result.get("language", "unknown")
         duration = utils.get_audio_duration(audio_file)
         creation_time = utils.get_file_creation_time(audio_file)
+
+        # Analyze quality for each segment
+        segments_with_quality = []
+        quality_flags = set()
+
+        for segment in segments:
+            quality = analyze_segment_quality(segment)
+            quality = add_quality_flags(quality)
+
+            quality_flags.update(quality['quality_flags'])
+
+            # Count quality issues
+            if quality['likely_hallucination']:
+                total_quality_issues["hallucination"] += 1
+            if quality['likely_silence']:
+                total_quality_issues["silence"] += 1
+            if quality['low_confidence']:
+                total_quality_issues["low_confidence"] += 1
+
+            segments_with_quality.append({
+                "id": segment.get("id", 0),
+                "start": round(segment.get("start", 0.0), 3),
+                "end": round(segment.get("end", 0.0), 3),
+                "text": segment.get("text", "").strip(),
+                **quality
+            })
 
         orphaned_recordings.append({
             "id": f"orphan_{len(orphaned_recordings) + 1}",
@@ -251,8 +453,11 @@ def generate_combined_json(paired_files: List[Dict],
             "audio_file": audio_file.name,
             "file_created": creation_time,
             "audio_duration_sec": round(duration, 3),
+            "language": language,
             "transcription": text,
             "word_count": utils.count_words(text),
+            "quality_flags": sorted(list(quality_flags)),
+            "segments": segments_with_quality if config.ENABLE_QUALITY_CHECKS else [],
             "note": "No matching JSON timestamp file found"
         })
 
@@ -260,6 +465,11 @@ def generate_combined_json(paired_files: List[Dict],
     total_duration = sum(a['audio_duration_sec'] for a in annotations)
     total_words = sum(a['word_count'] for a in annotations)
     total_chars = sum(a['character_count'] for a in annotations)
+
+    # Count recordings with quality issues
+    recordings_with_hallucination = sum(1 for a in annotations if 'hallucination_detected' in a.get('quality_flags', []))
+    recordings_with_silence = sum(1 for a in annotations if 'silence_detected' in a.get('quality_flags', []))
+    recordings_with_low_confidence = sum(1 for a in annotations if 'low_confidence' in a.get('quality_flags', []))
 
     # Build complete JSON structure
     data = {
@@ -272,7 +482,8 @@ def generate_combined_json(paired_files: List[Dict],
             "total_recordings": len(paired_files) + len(orphaned_files),
             "total_with_timestamps": len(annotations),
             "total_orphaned": len(orphaned_recordings),
-            "pipeline_version": config.PIPELINE_VERSION
+            "pipeline_version": config.PIPELINE_VERSION,
+            "quality_checks_enabled": config.ENABLE_QUALITY_CHECKS
         },
         "annotations": annotations,
         "orphaned_recordings": orphaned_recordings,
@@ -288,7 +499,21 @@ def generate_combined_json(paired_files: List[Dict],
                 "last_timestamp_sec": annotations[-1]['video_timestamp_sec'] if annotations else None,
                 "span_sec": round(annotations[-1]['video_timestamp_sec'] - annotations[0]['video_timestamp_sec'], 3) if len(annotations) > 1 else 0,
                 "span_formatted": utils.format_timestamp(annotations[-1]['video_timestamp_sec'] - annotations[0]['video_timestamp_sec'], include_milliseconds=False) if len(annotations) > 1 else "00:00:00"
-            }
+            },
+            "quality_metrics": {
+                "total_segments": sum(len(a.get('segments', [])) for a in annotations),
+                "segments_with_hallucination": total_quality_issues["hallucination"],
+                "segments_with_silence": total_quality_issues["silence"],
+                "segments_with_low_confidence": total_quality_issues["low_confidence"],
+                "recordings_with_hallucination": recordings_with_hallucination,
+                "recordings_with_silence": recordings_with_silence,
+                "recordings_with_low_confidence": recordings_with_low_confidence,
+                "thresholds": {
+                    "compression_ratio_threshold": config.COMPRESSION_RATIO_THRESHOLD,
+                    "no_speech_threshold": config.NO_SPEECH_THRESHOLD,
+                    "confidence_threshold": config.CONFIDENCE_THRESHOLD
+                }
+            } if config.ENABLE_QUALITY_CHECKS else {}
         }
     }
 

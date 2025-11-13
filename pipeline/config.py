@@ -47,6 +47,25 @@ TASK = "transcribe"
 VERBOSE = False
 
 # ============================================================================
+# QUALITY DETECTION SETTINGS
+# ============================================================================
+
+# Enable quality checks (hallucination detection, VAD)
+ENABLE_QUALITY_CHECKS = True
+
+# Compression ratio threshold for hallucination detection
+# Values > 2.4 indicate likely hallucinations or repetitive text
+COMPRESSION_RATIO_THRESHOLD = 2.4
+
+# No-speech probability threshold for silence detection
+# Values > 0.6 indicate likely silence (no speech detected)
+NO_SPEECH_THRESHOLD = 0.6
+
+# Confidence score threshold (based on avg_logprob)
+# Values < -1.0 indicate low confidence transcription
+CONFIDENCE_THRESHOLD = -1.0
+
+# ============================================================================
 # AUDIO PREPROCESSING SETTINGS
 # ============================================================================
 
@@ -150,7 +169,7 @@ LOG_FILE_NAME = "transcription.log"
 METHODOLOGY_FILE = BASE_DIR / "METHODOLOGY.md"
 
 # Version of this pipeline
-PIPELINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "1.1.0"
 
 # Processing description
 PROCESSING_DESCRIPTION = """

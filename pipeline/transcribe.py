@@ -33,7 +33,7 @@ class WhisperTranscriber:
             self.model = whisper.load_model(self.model_name)
             print(f"✓ Model loaded successfully")
 
-    def transcribe_file(self, audio_file: Path) -> Optional[str]:
+    def transcribe_file(self, audio_file: Path) -> Optional[Dict]:
         """
         Transcribe a single audio file.
 
@@ -41,7 +41,8 @@ class WhisperTranscriber:
             audio_file: Path to audio file
 
         Returns:
-            Transcribed text or None if error
+            Full Whisper result dictionary with text, segments, and language,
+            or None if error
         """
         if self.model is None:
             self.load_model()
@@ -57,16 +58,15 @@ class WhisperTranscriber:
                 word_timestamps=False,  # We have video timestamps already
             )
 
-            # Extract text
-            text = result["text"].strip()
-            return text
+            # Return full result with text, segments, and language
+            return result
 
         except Exception as e:
             print(f"Error transcribing {audio_file.name}: {e}")
             return None
 
     def transcribe_files(self, audio_files: List[Path],
-                        output_dir: Path) -> Dict[Path, str]:
+                        output_dir: Path) -> Dict[str, Dict]:
         """
         Transcribe multiple audio files.
 
@@ -75,7 +75,8 @@ class WhisperTranscriber:
             output_dir: Directory to save individual transcripts
 
         Returns:
-            Dictionary mapping audio file paths (by filename stem) to transcribed text
+            Dictionary mapping filename stems to full Whisper result dictionaries
+            (containing text, segments, language, etc.)
         """
         utils.ensure_dir(output_dir)
 
@@ -91,12 +92,14 @@ class WhisperTranscriber:
             print(f"  [{i}/{total}] {audio_file.name}...", end=" ", flush=True)
 
             # Transcribe
-            text = self.transcribe_file(audio_file)
+            result = self.transcribe_file(audio_file)
 
-            if text:
+            if result:
                 # Key by filename stem (without extension and path) for easier matching
-                transcripts[audio_file.stem] = text
+                transcripts[audio_file.stem] = result
 
+                # Extract text for display
+                text = result["text"].strip()
                 print(f"✓ ({len(text)} chars, {utils.count_words(text)} words)")
             else:
                 print(f"✗ Failed")
