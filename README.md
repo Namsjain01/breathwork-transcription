@@ -143,14 +143,17 @@ python3 pipeline/run_pipeline.py --input /your/folder
 git clone https://github.com/Namsjain01/breathwork-transcription.git
 cd breathwork-transcription
 
-# 2. Install dependencies
+# 2. Create virtual environment
+python3 -m venv .venv
+
+# 3. Activate virtual environment
+source .venv/bin/activate  # macOS/Linux
+# OR .venv\Scripts\activate for Windows
+
+# 4. Install dependencies
 pip install -r requirements.txt
-brew install ffmpeg  # macOS (or: apt install ffmpeg for Linux)
 
-# 3. Verify setup
-python3 pipeline/config.py
-
-# 4. Run pipeline on your recordings
+# 5. Run pipeline on your recordings
 python3 pipeline/run_pipeline.py --input /path/to/your/recordings
 
 # Output will be in: /path/to/your/recordings/transcripts/
@@ -166,7 +169,25 @@ python3 pipeline/run_pipeline.py --input /path/to/your/recordings
 - **FFmpeg** (audio processing)
 - **8GB+ RAM recommended** (for Whisper model)
 
-### Step 1: Install Python Dependencies
+### Step 1: Create Virtual Environment (Recommended)
+
+It's highly recommended to use a virtual environment to isolate dependencies:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # macOS/Linux
+# OR on Windows:
+# venv\Scripts\activate
+
+# You should see (venv) prefix in your terminal
+```
+
+**Note:** Remember to activate the virtual environment each time you work on this project.
+
+### Step 2: Install Python Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -178,7 +199,7 @@ This installs:
 - `ffmpeg-python` - Audio processing bindings
 - `numpy`, `tiktoken` - Supporting libraries
 
-### Step 2: Install FFmpeg
+### Step 3: Install FFmpeg
 
 **macOS:**
 ```bash
@@ -194,7 +215,7 @@ sudo apt install ffmpeg
 **Windows:**
 Download from https://ffmpeg.org/download.html and add to PATH
 
-### Step 3: Verify Installation
+### Step 4: Verify Installation
 
 ```bash
 python3 pipeline/config.py
@@ -203,6 +224,23 @@ python3 pipeline/config.py
 You should see:
 ```
 ✓ Configuration validated successfully
+```
+
+### Manual Setup
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate virtual environment
+source .venv/bin/activate  # macOS/Linux
+# OR .venv\Scripts\activate for Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Verify configuration
+python3 pipeline/config.py
 ```
 
 ---
@@ -675,6 +713,55 @@ All dependencies are open source and permissively licensed:
 ---
 
 ## Troubleshooting
+
+### Poor Transcription Quality (Missing or Wrong Words)
+
+**Issue:** Transcriptions are inaccurate, missing words, or contain wrong words
+
+**Cause:** The current Whisper model (small.en) may not be accurate enough for your audio quality or speech characteristics.
+
+**Solution 1: Use a Larger Model (Recommended)**
+
+Edit `pipeline/config.py` and change the model:
+
+```python
+# For better accuracy (recommended)
+WHISPER_MODEL = "medium.en"  # 769M params, ~3x slower but much more accurate
+
+# For maximum accuracy (if you have time and resources)
+WHISPER_MODEL = "large-v3"   # 1.5B params, ~10x slower but best accuracy
+```
+
+**Model Comparison:**
+
+| Model | Size | RAM | Accuracy | Speed | Best For |
+|-------|------|-----|----------|-------|----------|
+| small.en | 466MB | 2GB | Good | Fast | Clear speech, good audio |
+| medium.en | 1.5GB | 5GB | Better | 3x slower | Most use cases (recommended) |
+| large-v3 | 2.9GB | 10GB | Best | 10x slower | Difficult audio, accents, technical terms |
+
+**After changing the model, run the pipeline again:**
+```bash
+python3 pipeline/run_pipeline.py --input /path/to/your/recordings
+```
+
+The new model will be downloaded automatically on first use.
+
+**Solution 2: Improve Audio Quality**
+
+- Ensure good microphone placement
+- Reduce background noise
+- Speak clearly and at moderate pace
+- Check audio levels (not too quiet or distorted)
+
+**Solution 3: Check Quality Flags**
+
+Review the processing report for quality warnings:
+- Look for `hallucination_detected` flags
+- Check `low_confidence` segments
+- Review segments marked as `silence_detected`
+
+These flags in `transcripts/processing_report.txt` can help identify problematic sections.
 
 ### FFmpeg Not Found
 

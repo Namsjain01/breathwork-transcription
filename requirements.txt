@@ -12,8 +12,9 @@ numpy>=1.20.0
 
 # PyTorch (whisper dependency - CPU version)
 # Note: For GPU support, install torch separately with CUDA support
-torch>=2.0.0
-torchaudio>=2.0.0
+# Python 3.13 requires PyTorch 2.5+
+torch>=2.5.0
+torchaudio>=2.5.0
 
 # Additional whisper dependencies
 tiktoken>=0.3.0

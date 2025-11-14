@@ -30,8 +30,11 @@ OUTPUT_DIR_NAME = "transcripts"
 # WHISPER SETTINGS
 # ============================================================================
 
-# Model size: "tiny.en", "base.en", "small.en", "medium.en", "large"
-# small.en = 244M parameters, 466 MB, high accuracy (RECOMMENDED)
+# Model size: "tiny.en", "base.en", "small.en", "medium.en", "large-v3"
+# Accuracy increases with model size, but so does processing time:
+#   small.en  = 244M params, 466 MB  - Fast, good accuracy (RECOMMENDED)
+#   medium.en = 769M params, 1.5 GB  - Slower, better accuracy
+#   large-v3  = 1.5B params, 2.9 GB  - Slowest, best accuracy
 WHISPER_MODEL = "small.en"
 
 # Language (force English transcription)
