@@ -734,11 +734,7 @@ Perfect for:
 - Conversation analysis
 - Linguistic research
 
----
 
-**Version**: 1.1.0
-**Last Updated**: 2025-11-13
-**Repository**: https://github.com/Namsjain01/breathwork-transcription
 
 ---
 
