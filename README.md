@@ -40,38 +40,6 @@ This pipeline automatically transcribes audio recordings (voice notes) and links
 
 ## How It Works
 
-### Pipeline Workflow
-
-```
-1. DETECT STRUCTURE
-   └─> Auto-detect if processing single session or multiple sessions
-
-2. FIND & MATCH FILES
-   └─> Match .wav audio files with .json timestamp files
-
-3. PREPROCESS AUDIO
-   └─> Normalize volume, convert to optimal format (16kHz mono 16-bit PCM)
-   └─> Uses FFmpeg for audio processing
-
-4. TRANSCRIBE WITH AI
-   └─> OpenAI Whisper model (small.en, 244M parameters)
-   └─> Runs locally on your CPU/GPU
-   └─> Temperature 0.0 for deterministic results
-
-5. QUALITY ANALYSIS (NEW!)
-   └─> Detect hallucinations (fake/repetitive text)
-   └─> Identify silence segments
-   └─> Flag low-confidence transcriptions
-
-6. MERGE WITH TIMESTAMPS
-   └─> Combine transcripts with video timestamps
-   └─> Generate individual + combined transcripts
-
-7. OUTPUT RESULTS
-   └─> Save TXT (human-readable) and JSON (machine-readable)
-   └─> Create processing report with quality statistics
-```
-
 ### Processing Details
 
 - **Audio Preprocessing**: FFmpeg converts audio to Whisper-optimized format (16kHz mono, 16-bit PCM) with loudness normalization
@@ -84,48 +52,16 @@ This pipeline automatically transcribes audio recordings (voice notes) and links
 
 ## Privacy & Data Security
 
-### 🔒 Your Data Stays Local - Guaranteed
+### Data Stays Local
 
-**ZERO data leaves your computer. Here's proof:**
 
-#### 1. **No Network Code in Pipeline**
-- The pipeline scripts contain NO network/HTTP requests
-- No API calls to external services
-- No telemetry or analytics
-- Verify yourself: Search pipeline code for `requests`, `urllib`, `http`, `socket` - you won't find them
+#### 1. No Network Dependencies in the Pipeline
 
-#### 2. **Whisper Runs 100% Locally**
-- Whisper is an open-source model that runs on YOUR computer
-- Model downloaded ONCE during first setup
-- After download, NO internet connection needed
-- See Whisper code: https://github.com/openai/whisper
+- All pipeline scripts operate offline and do not initiate network or HTTP requests.
 
-#### 3. **No Cloud Services**
-- Not using OpenAI API (that would send data to cloud)
-- Not using any transcription services
-- All processing happens on your CPU/GPU
-
+- No external API calls, telemetry, or analytics are included in any part of the workflow.
 #### 4. **Verify Yourself**
 
-Test with internet OFF:
-```bash
-# 1. Download model (requires internet, ONE TIME)
-python3 pipeline/run_pipeline.py --input /your/folder
-
-# 2. Turn OFF internet connection
-
-# 3. Run again - it will work without internet!
-python3 pipeline/run_pipeline.py --input /your/folder
-```
-
-#### Privacy Summary
-
-✅ Audio files never leave your device
-✅ No internet connection required (after setup)
-✅ No cloud services used
-✅ No data sent to OpenAI or any third party
-✅ No telemetry, analytics, or tracking
-✅ Your recordings stay private, period.
 
 **Perfect for:**
 - HIPAA-regulated healthcare research
@@ -169,64 +105,7 @@ python3 pipeline/run_pipeline.py --input /path/to/your/recordings
 - **FFmpeg** (audio processing)
 - **8GB+ RAM recommended** (for Whisper model)
 
-### Step 1: Create Virtual Environment (Recommended)
-
-It's highly recommended to use a virtual environment to isolate dependencies:
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # macOS/Linux
-# OR on Windows:
-# venv\Scripts\activate
-
-# You should see (venv) prefix in your terminal
-```
-
-**Note:** Remember to activate the virtual environment each time you work on this project.
-
-### Step 2: Install Python Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-This installs:
-- `openai-whisper` - Local transcription AI
-- `torch` - PyTorch (required by Whisper)
-- `ffmpeg-python` - Audio processing bindings
-- `numpy`, `tiktoken` - Supporting libraries
-
-### Step 3: Install FFmpeg
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt update
-sudo apt install ffmpeg
-```
-
-**Windows:**
-Download from https://ffmpeg.org/download.html and add to PATH
-
-### Step 4: Verify Installation
-
-```bash
-python3 pipeline/config.py
-```
-
-You should see:
-```
-✓ Configuration validated successfully
-```
-
-### Manual Setup
+### Setup
 
 ```bash
 # Create virtual environment
@@ -238,6 +117,17 @@ source .venv/bin/activate  # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Install ffmpeg
+
+brew install ffmpeg # macOS/Linux
+
+# for Linux
+sudo apt update
+sudo apt install ffmpeg
+
+# for Windows
+ Download from https://ffmpeg.org/download.html and add to PATH
 
 # Verify configuration
 python3 pipeline/config.py
@@ -353,18 +243,7 @@ The JSON file must contain a video timestamp in seconds:
 
 This number represents the timestamp in the video where this voice note was recorded.
 
-### Example
 
-If you recorded a voice note at 2 minutes and 5.693 seconds into a video:
-
-**note_002min05sec.json:**
-```json
-{
-  "video_timestamp_sec": 125.693
-}
-```
-
-**note_002min05sec.wav:** (your audio recording)
 
 ### Audio Format
 
@@ -381,25 +260,6 @@ Audio files WITHOUT matching JSON files will still be transcribed but marked as 
 
 ## Output Files
 
-### Folder Structure
-
-```
-your_recordings/
-├── note1.wav                     # Your original files
-├── note1.json
-├── note2.wav
-├── note2.json
-└── transcripts/                  # ← Output folder (created automatically)
-    ├── transcripts/              # Individual transcript files
-    │   ├── note1.txt             # Human-readable transcript
-    │   ├── note1.json            # Machine-readable with metadata
-    │   ├── note2.txt
-    │   └── note2.json
-    │
-    ├── combined_transcript.txt   # All transcripts in one file
-    ├── combined_transcript.json  # All transcripts + full metadata
-    └── processing_report.txt     # Statistics and processing info
-```
 
 ### Individual Transcript (TXT)
 
@@ -874,11 +734,7 @@ Perfect for:
 - Conversation analysis
 - Linguistic research
 
----
 
-**Version**: 1.1.0
-**Last Updated**: 2025-11-13
-**Repository**: https://github.com/Namsjain01/breathwork-transcription
 
 ---
 
