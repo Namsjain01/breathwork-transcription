@@ -173,6 +173,7 @@ my_recording_session/transcripts/
 │   └── ...
 ├── combined_transcript.txt   # All transcripts together
 ├── combined_transcript.json  # Machine-readable format
+├── plain_text_transcript.txt # Plain text only (no timestamps/metadata)
 └── processing_report.txt     # Statistics and metadata
 ```
 
@@ -383,6 +384,18 @@ Complete structured data:
     }
   }
 }
+```
+
+### Plain Text Transcript
+
+**plain_text_transcript.txt:**
+
+All transcribed text concatenated together without timestamps or metadata. Perfect for copy/paste or text analysis.
+
+```
+This is the first transcription text.
+
+This is the second transcription text.
 ```
 
 ### Processing Report
