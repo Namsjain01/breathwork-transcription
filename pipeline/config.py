@@ -118,6 +118,9 @@ GENERATE_COMBINED_JSON = True
 # Generate processing report
 GENERATE_PROCESSING_REPORT = True
 
+# Generate plain text transcript (all text, no timestamps/metadata)
+GENERATE_PLAIN_TEXT = True
+
 # Delete intermediate processed audio files after transcription
 DELETE_INTERMEDIATE_FILES = True
 

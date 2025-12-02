@@ -130,9 +130,21 @@ def process_session(session_info: dict, cleanup: bool = True) -> bool:
         )
         print(f"  ✓ Combined JSON saved to: {json_file}")
 
-    # Step 7: Generate processing report
+    # Step 7: Generate plain text transcript
+    if config.GENERATE_PLAIN_TEXT:
+        print("\nStep 7: Generating plain text transcript...")
+        plain_text_file = output_dir / "plain_text_transcript.txt"
+        merge_outputs.generate_plain_text(
+            paired_files,
+            orphaned_files,
+            transcripts,
+            plain_text_file
+        )
+        print(f"  ✓ Plain text saved to: {plain_text_file}")
+
+    # Step 8: Generate processing report
     if config.GENERATE_PROCESSING_REPORT:
-        print("\nStep 7: Generating processing report...")
+        print("\nStep 8: Generating processing report...")
         report_file = output_dir / "processing_report.txt"
         generate_processing_report(
             session_name,
@@ -145,9 +157,9 @@ def process_session(session_info: dict, cleanup: bool = True) -> bool:
         )
         print(f"  ✓ Processing report saved to: {report_file}")
 
-    # Step 8: Cleanup intermediate files
+    # Step 9: Cleanup intermediate files
     if cleanup and config.DELETE_INTERMEDIATE_FILES:
-        print("\nStep 8: Cleaning up intermediate files...")
+        print("\nStep 9: Cleaning up intermediate files...")
         if normalized_dir.exists():
             shutil.rmtree(normalized_dir)
             print(f"  ✓ Deleted: {normalized_dir}")
@@ -260,6 +272,8 @@ def generate_processing_report(session_name: str, video_file: Path,
             f.write(f"✓ combined_transcript.txt\n")
         if config.GENERATE_COMBINED_JSON:
             f.write(f"✓ combined_transcript.json\n")
+        if config.GENERATE_PLAIN_TEXT:
+            f.write(f"✓ plain_text_transcript.txt\n")
         f.write(f"✓ processing_report.txt\n\n")
 
         f.write("SYSTEM INFO\n")

@@ -521,6 +521,58 @@ def generate_combined_json(paired_files: List[Dict],
     utils.save_json_data(data, output_file)
 
 
+def generate_plain_text(paired_files: List[Dict],
+                       orphaned_files: List[Path],
+                       transcripts: Dict[str, Dict],
+                       output_file: Path) -> None:
+    """
+    Generate plain text transcript without timestamps or metadata.
+
+    Args:
+        paired_files: List of paired audio/JSON file dicts
+        orphaned_files: List of orphaned audio files
+        transcripts: Dictionary mapping filename stems to Whisper result dicts
+        output_file: Output TXT file path
+    """
+    with open(output_file, 'w', encoding='utf-8') as f:
+        # Process paired files (ordered by timestamp)
+        for i, file_info in enumerate(paired_files):
+            audio_file = file_info['audio']
+            filename_stem = audio_file.stem
+
+            # Match by filename stem
+            if filename_stem not in transcripts:
+                continue
+
+            result = transcripts[filename_stem]
+            text = result["text"].strip()
+
+            # Write transcription text
+            f.write(text)
+            
+            # Add double newline separator between recordings
+            if i < len(paired_files) - 1 or orphaned_files:
+                f.write("\n\n")
+
+        # Process orphaned files
+        for i, audio_file in enumerate(orphaned_files):
+            filename_stem = audio_file.stem
+
+            # Match by filename stem
+            if filename_stem not in transcripts:
+                continue
+
+            result = transcripts[filename_stem]
+            text = result["text"].strip()
+
+            # Write transcription text
+            f.write(text)
+            
+            # Add double newline separator between recordings (except last)
+            if i < len(orphaned_files) - 1:
+                f.write("\n\n")
+
+
 if __name__ == "__main__":
     print("Output merge module loaded successfully")
     print("This module is meant to be called from run_pipeline.py")
