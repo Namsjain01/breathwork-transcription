@@ -8,7 +8,7 @@ openai-whisper>=20231117
 ffmpeg-python>=0.2.0
 
 # Scientific computing (whisper dependency)
-numpy>=1.20.0
+#numpy>=1.20.0 (installed via conda on cluster) 
 
 # PyTorch (whisper dependency - CPU version)
 # Note: For GPU support, install torch separately with CUDA support
