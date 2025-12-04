@@ -6,6 +6,8 @@ This module handles loading the Whisper model and transcribing audio files.
 
 from pathlib import Path
 from typing import List, Dict, Optional
+
+import torch
 import whisper
 
 import config
@@ -15,23 +17,26 @@ import utils
 class WhisperTranscriber:
     """Wrapper class for Whisper transcription."""
 
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, device: str = None):
         """
         Initialize Whisper transcriber.
 
         Args:
             model_name: Whisper model to use (defaults to config.WHISPER_MODEL)
+            device: "cuda" or "cpu" (if None, auto-detect)
         """
         self.model_name = model_name or config.WHISPER_MODEL
+        # Auto-select: GPU if available, else CPU
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
 
     def load_model(self):
         """Load the Whisper model."""
         if self.model is None:
-            print(f"Loading Whisper model '{self.model_name}'...")
-            print(f"(This may take a moment on first run while downloading the model)")
-            self.model = whisper.load_model(self.model_name)
-            print(f"✓ Model loaded successfully")
+            print(f"Loading Whisper model '{self.model_name}' on {self.device}...")
+            print("(This may take a moment on first run while downloading the model)")
+            self.model = whisper.load_model(self.model_name, device=self.device)
+            print("✓ Model loaded successfully")
 
     def transcribe_file(self, audio_file: Path) -> Optional[Dict]:
         """
@@ -65,8 +70,11 @@ class WhisperTranscriber:
             print(f"Error transcribing {audio_file.name}: {e}")
             return None
 
-    def transcribe_files(self, audio_files: List[Path],
-                        output_dir: Path) -> Dict[str, Dict]:
+    def transcribe_files(
+        self,
+        audio_files: List[Path],
+        output_dir: Path,
+    ) -> Dict[str, Dict]:
         """
         Transcribe multiple audio files.
 
@@ -102,7 +110,7 @@ class WhisperTranscriber:
                 text = result["text"].strip()
                 print(f"✓ ({len(text)} chars, {utils.count_words(text)} words)")
             else:
-                print(f"✗ Failed")
+                print("✗ Failed")
 
         print(f"\n✓ Successfully transcribed {len(transcripts)}/{total} files")
 
@@ -123,29 +131,30 @@ if __name__ == "__main__":
     print(f"\nTesting with session: {session['name']}")
 
     # Find audio files
-    paired, orphaned = utils.find_audio_json_pairs(session['path'])
+    paired, orphaned = utils.find_audio_json_pairs(session["path"])
     if not paired:
         print("No audio files found!")
         exit(1)
 
     # Test on first file only
-    test_file = paired[0]['audio']
+    test_file = paired[0]["audio"]
     print(f"\nTest transcription: {test_file.name}")
 
-    # Create transcriber
+    # Create transcriber (auto-selects CPU/GPU)
     transcriber = WhisperTranscriber()
     transcriber.load_model()
 
     # Transcribe
-    text = transcriber.transcribe_file(test_file)
+    result = transcriber.transcribe_file(test_file)
 
-    if text:
-        print(f"\n✓ Transcription successful!")
-        print(f"\nTranscribed text:")
-        print(f"─" * 80)
+    if result:
+        text = result["text"]
+        print("\n✓ Transcription successful!")
+        print("\nTranscribed text:")
+        print("─" * 80)
         print(text)
-        print(f"─" * 80)
-        print(f"\nStats:")
+        print("─" * 80)
+        print("\nStats:")
         print(f"  Characters: {len(text)}")
         print(f"  Words: {utils.count_words(text)}")
     else:
